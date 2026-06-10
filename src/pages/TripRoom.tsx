@@ -51,6 +51,7 @@ interface ActivityCategory {
 }
 
 type TripTab = "expenses" | "balances" | "members" | "activity";
+type SlideDirection = "left" | "right";
 
 const tripTabs: TripTab[] = ["expenses", "balances", "members", "activity"];
 
@@ -130,6 +131,7 @@ const TripRoom = () => {
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [activeTab, setActiveTab] = useState<TripTab>("expenses");
+  const [slideDirection, setSlideDirection] = useState<SlideDirection>("left");
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const trip = useLiveQuery(() => (id ? db.trips.get(id) : undefined), [id]);
@@ -167,18 +169,26 @@ const TripRoom = () => {
   const memberName = (mid: string) =>
     members?.find((m) => m.id === mid)?.name || "Unknown";
 
+  const selectTab = (nextTab: TripTab) => {
+    const currentIndex = tripTabs.indexOf(activeTab);
+    const nextIndex = tripTabs.indexOf(nextTab);
+
+    if (nextIndex === -1 || nextTab === activeTab) return;
+
+    setSlideDirection(nextIndex > currentIndex ? "left" : "right");
+    setActiveTab(nextTab);
+  };
+
   const moveTab = (direction: "next" | "previous") => {
-    setActiveTab((current) => {
-      const currentIndex = tripTabs.indexOf(current);
-      const nextIndex =
-        direction === "next" ? currentIndex + 1 : currentIndex - 1;
+    const currentIndex = tripTabs.indexOf(activeTab);
+    const nextIndex =
+      direction === "next" ? currentIndex + 1 : currentIndex - 1;
 
-      if (nextIndex < 0 || nextIndex >= tripTabs.length) {
-        return current;
-      }
+    if (nextIndex < 0 || nextIndex >= tripTabs.length) {
+      return;
+    }
 
-      return tripTabs[nextIndex];
-    });
+    selectTab(tripTabs[nextIndex]);
   };
 
   const handleTabTouchEnd = (x: number, y: number) => {
@@ -196,6 +206,15 @@ const TripRoom = () => {
 
     moveTab(deltaX < 0 ? "next" : "previous");
   };
+
+  const tabContentClass = (value: TripTab) =>
+    cn(
+      "space-y-3 mt-4 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-200",
+      activeTab === value &&
+        (slideDirection === "left"
+          ? "data-[state=active]:slide-in-from-right-4"
+          : "data-[state=active]:slide-in-from-left-4")
+    );
 
   const deleteExpense = async (eid: string, desc: string) => {
     if (!confirm(`Delete expense "${desc}"?`)) return;
@@ -771,7 +790,7 @@ const TripRoom = () => {
           </Card>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TripTab)}>
+        <Tabs value={activeTab} onValueChange={(value) => selectTab(value as TripTab)}>
           {/* Tabs: always show labels, compact on mobile */}
           <TabsList className="flex w-full border border-border rounded-lg p-1 sm:p-2 gap-0.5 sm:gap-4">
             <TabsTrigger
@@ -818,7 +837,7 @@ const TripRoom = () => {
               touchStartRef.current = null;
             }}
           >
-          <TabsContent value="expenses" className="space-y-3 mt-4">
+          <TabsContent value="expenses" className={tabContentClass("expenses")}>
             {!expenses?.length ? (
               <Card className="p-8 text-center text-muted-foreground">
                 No expenses yet. Add the first one below.
@@ -870,7 +889,7 @@ const TripRoom = () => {
             )}
           </TabsContent>
 
-          <TabsContent value="balances" className="space-y-4 mt-4">
+          <TabsContent value="balances" className={cn(tabContentClass("balances"), "space-y-4")}>
             {!members?.length ? (
               <Card className="p-8 text-center text-muted-foreground">
                 Add members to see balances.
@@ -945,7 +964,7 @@ const TripRoom = () => {
             )}
           </TabsContent>
 
-          <TabsContent value="members" className="space-y-2 mt-4">
+          <TabsContent value="members" className={cn(tabContentClass("members"), "space-y-2")}>
             {!members?.length ? (
               <Card className="p-8 text-center text-muted-foreground">
                 No members yet.
@@ -1036,7 +1055,7 @@ const TripRoom = () => {
             </Button>
           </TabsContent>
 
-          <TabsContent value="activity" className="space-y-2 mt-4">
+          <TabsContent value="activity" className={cn(tabContentClass("activity"), "space-y-2")}>
             {!activities?.length ? (
               <Card className="p-8 text-center text-muted-foreground">
                 No activity yet.
