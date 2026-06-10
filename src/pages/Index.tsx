@@ -143,8 +143,16 @@ const Index = () => {
     selectView(tripViews[nextIndex]);
   };
 
+  const handleViewTouchStart = (x: number, y: number) => {
+    touchStartRef.current = { x, y };
+  };
+
+  const cancelViewTouch = () => {
+    touchStartRef.current = null;
+  };
+
   const viewContentClass = cn(
-    "touch-pan-y data-[view-active=true]:animate-in data-[view-active=true]:fade-in-0 data-[view-active=true]:duration-200",
+    "data-[view-active=true]:animate-in data-[view-active=true]:fade-in-0 data-[view-active=true]:duration-200",
     slideDirection === "left"
       ? "data-[view-active=true]:slide-in-from-right-4"
       : "data-[view-active=true]:slide-in-from-left-4"
@@ -170,7 +178,18 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[image:var(--gradient-sand)]">
+    <div
+      className="min-h-screen touch-pan-y bg-[image:var(--gradient-sand)]"
+      onTouchStart={(event) => {
+        const touch = event.touches[0];
+        handleViewTouchStart(touch.clientX, touch.clientY);
+      }}
+      onTouchEnd={(event) => {
+        const touch = event.changedTouches[0];
+        handleViewTouchEnd(touch.clientX, touch.clientY);
+      }}
+      onTouchCancel={cancelViewTouch}
+    >
       <header className="border-b border-border/60 bg-background sticky top-0 z-10">
         <div className="container flex items-center justify-between py-5">
           <div className="flex items-center gap-2 min-w-0">
@@ -223,17 +242,6 @@ const Index = () => {
           key={view}
           data-view-active="true"
           className={viewContentClass}
-          onTouchStart={(event) => {
-            const touch = event.touches[0];
-            touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-          }}
-          onTouchEnd={(event) => {
-            const touch = event.changedTouches[0];
-            handleViewTouchEnd(touch.clientX, touch.clientY);
-          }}
-          onTouchCancel={() => {
-            touchStartRef.current = null;
-          }}
         >
           {view === "active" ? (
             !activeTrips.length ? (

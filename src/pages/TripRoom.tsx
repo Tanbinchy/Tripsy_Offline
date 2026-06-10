@@ -207,6 +207,14 @@ const TripRoom = () => {
     moveTab(deltaX < 0 ? "next" : "previous");
   };
 
+  const handleTabTouchStart = (x: number, y: number) => {
+    touchStartRef.current = { x, y };
+  };
+
+  const cancelTabTouch = () => {
+    touchStartRef.current = null;
+  };
+
   const tabContentClass = (value: TripTab) =>
     cn(
       "space-y-3 mt-4 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-200",
@@ -668,7 +676,18 @@ const TripRoom = () => {
   // );
 
   return (
-    <div className="min-h-screen bg-[image:var(--gradient-sand)]">
+    <div
+      className="min-h-screen touch-pan-y bg-[image:var(--gradient-sand)]"
+      onTouchStart={(event) => {
+        const touch = event.touches[0];
+        handleTabTouchStart(touch.clientX, touch.clientY);
+      }}
+      onTouchEnd={(event) => {
+        const touch = event.changedTouches[0];
+        handleTabTouchEnd(touch.clientX, touch.clientY);
+      }}
+      onTouchCancel={cancelTabTouch}
+    >
       <header className="border-b border-border/60 bg-background sticky top-0 z-10">
         <div className="container py-2 sm:py-4">
           <Link
@@ -823,20 +842,7 @@ const TripRoom = () => {
             </TabsTrigger>
           </TabsList>
 
-          <div
-            className="touch-pan-y"
-            onTouchStart={(event) => {
-              const touch = event.touches[0];
-              touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-            }}
-            onTouchEnd={(event) => {
-              const touch = event.changedTouches[0];
-              handleTabTouchEnd(touch.clientX, touch.clientY);
-            }}
-            onTouchCancel={() => {
-              touchStartRef.current = null;
-            }}
-          >
+          <div>
           <TabsContent value="expenses" className={tabContentClass("expenses")}>
             {!expenses?.length ? (
               <Card className="p-8 text-center text-muted-foreground">
