@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Home,
@@ -49,6 +49,10 @@ interface ActivityCategory {
   bgClass: string;
   dotClass: string;
 }
+
+type TripTab = "expenses" | "balances" | "members" | "activity";
+
+const tripTabs: TripTab[] = ["expenses", "balances", "members", "activity"];
 
 const getActivityCategory = (message: string): ActivityCategory => {
   const lower = message.toLowerCase();
@@ -125,6 +129,8 @@ const TripRoom = () => {
   const [editTripOpen, setEditTripOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [activeTab, setActiveTab] = useState<TripTab>("expenses");
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const trip = useLiveQuery(() => (id ? db.trips.get(id) : undefined), [id]);
   const members = useLiveQuery(
@@ -160,6 +166,36 @@ const TripRoom = () => {
 
   const memberName = (mid: string) =>
     members?.find((m) => m.id === mid)?.name || "Unknown";
+
+  const moveTab = (direction: "next" | "previous") => {
+    setActiveTab((current) => {
+      const currentIndex = tripTabs.indexOf(current);
+      const nextIndex =
+        direction === "next" ? currentIndex + 1 : currentIndex - 1;
+
+      if (nextIndex < 0 || nextIndex >= tripTabs.length) {
+        return current;
+      }
+
+      return tripTabs[nextIndex];
+    });
+  };
+
+  const handleTabTouchEnd = (x: number, y: number) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+
+    if (!start) return;
+
+    const deltaX = x - start.x;
+    const deltaY = y - start.y;
+    const isHorizontalSwipe =
+      Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4;
+
+    if (!isHorizontalSwipe) return;
+
+    moveTab(deltaX < 0 ? "next" : "previous");
+  };
 
   const deleteExpense = async (eid: string, desc: string) => {
     if (!confirm(`Delete expense "${desc}"?`)) return;
@@ -223,7 +259,7 @@ const TripRoom = () => {
           <div className="container py-4">
             <Link
               to="/"
-              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+              className="inline-flex min-h-10 items-center gap-2 rounded-md bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
             >
               <ArrowLeft className="w-4 h-4" /> All trips
             </Link>
@@ -618,9 +654,9 @@ const TripRoom = () => {
         <div className="container py-2 sm:py-4">
           <Link
             to="/"
-            className="inline-flex items-center gap-1 text-xs sm:text-sm text-muted-foreground hover:text-foreground mb-1 sm:mb-2"
+            className="mb-2 inline-flex min-h-10 items-center gap-2 rounded-md bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
           >
-            <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4" /> All trips
+            <ArrowLeft className="w-4 h-4" /> All trips
           </Link>
           {/* Title + icons on same row for mobile */}
           <div className="flex items-center justify-between gap-2">
@@ -735,7 +771,7 @@ const TripRoom = () => {
           </Card>
         </div>
 
-        <Tabs defaultValue="expenses">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TripTab)}>
           {/* Tabs: always show labels, compact on mobile */}
           <TabsList className="flex w-full border border-border rounded-lg p-1 sm:p-2 gap-0.5 sm:gap-4">
             <TabsTrigger
@@ -768,6 +804,20 @@ const TripRoom = () => {
             </TabsTrigger>
           </TabsList>
 
+          <div
+            className="touch-pan-y"
+            onTouchStart={(event) => {
+              const touch = event.touches[0];
+              touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+            }}
+            onTouchEnd={(event) => {
+              const touch = event.changedTouches[0];
+              handleTabTouchEnd(touch.clientX, touch.clientY);
+            }}
+            onTouchCancel={() => {
+              touchStartRef.current = null;
+            }}
+          >
           <TabsContent value="expenses" className="space-y-3 mt-4">
             {!expenses?.length ? (
               <Card className="p-8 text-center text-muted-foreground">
@@ -1027,6 +1077,7 @@ const TripRoom = () => {
               })
             )}
           </TabsContent>
+          </div>
         </Tabs>
       </main>
 
