@@ -10,7 +10,7 @@ import {
   Wallet,
   Pin,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,13 +24,19 @@ import {
 } from "@/lib/db";
 import { CreateTripDialog } from "@/components/CreateTripDialog";
 import { EditTripDialog } from "@/components/EditTripDialog";
+import { cn } from "@/lib/utils";
 
 type TripView = "active" | "trash";
+type SlideDirection = "left" | "right";
+
+const tripViews: TripView[] = ["active", "trash"];
 
 const Index = () => {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<TripView>("active");
+  const [slideDirection, setSlideDirection] = useState<SlideDirection>("left");
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const trips = useLiveQuery(() =>
     db.trips.orderBy("createdAt").reverse().toArray()
@@ -91,7 +97,7 @@ const Index = () => {
     await restoreTripFromTrash(trip.id);
     await logActivity(trip.id, "Restored trip from recycle bin");
     toast.success("Trip restored");
-    setView("active");
+    selectView("active");
   };
 
   const permanentlyDelete = async (trip: Trip) => {
@@ -105,6 +111,44 @@ const Index = () => {
     await deleteTripForever(trip.id);
     toast.success("Trip permanently deleted");
   };
+
+  const selectView = (nextView: TripView) => {
+    const currentIndex = tripViews.indexOf(view);
+    const nextIndex = tripViews.indexOf(nextView);
+
+    if (nextIndex === -1 || nextView === view) return;
+
+    setSlideDirection(nextIndex > currentIndex ? "left" : "right");
+    setView(nextView);
+  };
+
+  const handleViewTouchEnd = (x: number, y: number) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+
+    if (!start) return;
+
+    const deltaX = x - start.x;
+    const deltaY = y - start.y;
+    const isHorizontalSwipe =
+      Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4;
+
+    if (!isHorizontalSwipe) return;
+
+    const currentIndex = tripViews.indexOf(view);
+    const nextIndex = deltaX < 0 ? currentIndex + 1 : currentIndex - 1;
+
+    if (nextIndex < 0 || nextIndex >= tripViews.length) return;
+
+    selectView(tripViews[nextIndex]);
+  };
+
+  const viewContentClass = cn(
+    "touch-pan-y data-[view-active=true]:animate-in data-[view-active=true]:fade-in-0 data-[view-active=true]:duration-200",
+    slideDirection === "left"
+      ? "data-[view-active=true]:slide-in-from-right-4"
+      : "data-[view-active=true]:slide-in-from-left-4"
+  );
 
   const renderStats = (trip: Trip) => {
     const stats = expenseCounts?.[trip.id];
@@ -157,7 +201,7 @@ const Index = () => {
               type="button"
               variant={view === "active" ? "secondary" : "ghost"}
               className="flex-1 justify-center gap-2 sm:flex-none"
-              onClick={() => setView("active")}
+              onClick={() => selectView("active")}
             >
               <MapPin className="w-4 h-4" />
               Trips
@@ -166,7 +210,7 @@ const Index = () => {
               type="button"
               variant={view === "trash" ? "secondary" : "ghost"}
               className="flex-1 justify-center gap-2 sm:flex-none"
-              onClick={() => setView("trash")}
+              onClick={() => selectView("trash")}
             >
               <Trash2 className="w-4 h-4" />
               Recycle bin
@@ -175,9 +219,25 @@ const Index = () => {
           </div>
         </div>
 
-        {view === "active" ? (
-          !activeTrips.length ? (
-            <div className="max-w-xl mx-auto text-center py-16">
+        <div
+          key={view}
+          data-view-active="true"
+          className={viewContentClass}
+          onTouchStart={(event) => {
+            const touch = event.touches[0];
+            touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+          }}
+          onTouchEnd={(event) => {
+            const touch = event.changedTouches[0];
+            handleViewTouchEnd(touch.clientX, touch.clientY);
+          }}
+          onTouchCancel={() => {
+            touchStartRef.current = null;
+          }}
+        >
+          {view === "active" ? (
+            !activeTrips.length ? (
+              <div className="max-w-xl mx-auto text-center py-16">
               <div className="w-20 h-20 rounded-2xl bg-[image:var(--gradient-warm)] mx-auto flex items-center justify-center shadow-[var(--shadow-soft)] mb-6">
                 <MapPin className="w-10 h-10 text-primary-foreground" />
               </div>
@@ -192,9 +252,9 @@ const Index = () => {
                 <Plus className="w-4 h-4" />
                 Create your first trip
               </Button>
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {activeTrips.map((trip) => (
                 <Card
                   key={trip.id}
@@ -258,18 +318,18 @@ const Index = () => {
                   </Link>
                 </Card>
               ))}
-            </div>
-          )
-        ) : !deletedTrips.length ? (
-          <Card className="mx-auto max-w-xl p-8 text-center text-muted-foreground">
+              </div>
+            )
+          ) : !deletedTrips.length ? (
+            <Card className="mx-auto max-w-xl p-8 text-center text-muted-foreground">
             <Trash2 className="mx-auto mb-4 h-10 w-10" />
             <h3 className="mb-2 text-lg font-semibold text-foreground">
               Recycle bin is empty
             </h3>
             <p>Trips you move to the recycle bin will appear here.</p>
-          </Card>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            </Card>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {deletedTrips.map((trip) => (
               <Card key={trip.id} className="border-border/60 p-5">
                 <div className="mb-4">
@@ -310,8 +370,9 @@ const Index = () => {
                 </div>
               </Card>
             ))}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </main>
 
       <CreateTripDialog open={open} onOpenChange={setOpen} />
